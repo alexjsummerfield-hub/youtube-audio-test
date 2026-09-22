@@ -21,6 +21,8 @@ input[type=range]{width:100%;margin:10px 0 28px}
 button{border:1px solid #333;background:#151515;color:#fff;border-radius:18px;min-height:68px;font-size:18px;font-weight:650}
 #playPause{font-size:22px;min-height:82px}
 .saved{text-align:center;color:#777;font-size:13px;margin-top:24px;min-height:18px}
+.sleep{text-align:center;margin-top:18px}
+select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;padding:12px 16px;font-size:16px}
 .back{text-align:center;margin-top:36px}
 .back button{min-height:48px;padding:0 18px;font-size:15px}
 </style>
@@ -37,6 +39,16 @@ button{border:1px solid #333;background:#151515;color:#fff;border-radius:18px;mi
 <button onclick="skip(30)">+30 sec</button>
 </div>
 <div class="saved" id="saved"></div>
+<div class="sleep">
+<select id="sleepTimer" aria-label="Sleep timer">
+<option value="0">Sleep timer: Off</option>
+<option value="15">15 minutes</option>
+<option value="30">30 minutes</option>
+<option value="45">45 minutes</option>
+<option value="60">60 minutes</option>
+</select>
+<div class="saved" id="sleepStatus"></div>
+</div>
 <div class="back"><button onclick="document.getElementById('videoSection').scrollIntoView({behavior:'smooth'})">Show video</button></div>
 </section>
 
@@ -52,6 +64,7 @@ button{border:1px solid #333;background:#151515;color:#fff;border-radius:18px;mi
 const VIDEO_ID='UZeokmLo-qQ';
 const STORAGE_KEY='yt-audio-position-'+VIDEO_ID;
 let player, ready=false, dragging=false;
+let sleepEndsAt=0, sleepInterval=null;
 
 const tag=document.createElement('script');
 tag.src='https://www.youtube.com/iframe_api';
@@ -117,6 +130,37 @@ setInterval(()=>{
   }
 },1000);
 document.getElementById('backToControls').addEventListener('click',()=>document.getElementById('audioMode').scrollIntoView({behavior:'smooth'}));
+
+document.getElementById('sleepTimer').addEventListener('change',function(){
+  const mins=Number(this.value);
+  clearInterval(sleepInterval);
+  sleepEndsAt=0;
+  if(!mins){
+    document.getElementById('sleepStatus').textContent='';
+    return;
+  }
+  sleepEndsAt=Date.now()+mins*60000;
+  updateSleepTimer();
+  sleepInterval=setInterval(updateSleepTimer,1000);
+});
+
+function updateSleepTimer(){
+  if(!sleepEndsAt)return;
+  const remaining=sleepEndsAt-Date.now();
+  if(remaining<=0){
+    clearInterval(sleepInterval);
+    sleepInterval=null;
+    sleepEndsAt=0;
+    if(ready) player.pauseVideo();
+    document.getElementById('sleepStatus').textContent='Sleep timer finished';
+    document.getElementById('sleepTimer').value='0';
+    return;
+  }
+  const totalSeconds=Math.ceil(remaining/1000);
+  const m=Math.floor(totalSeconds/60);
+  const s=totalSeconds%60;
+  document.getElementById('sleepStatus').textContent='Pauses in '+m+':'+String(s).padStart(2,'0');
+}
 
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden&&ready){
