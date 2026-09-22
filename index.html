@@ -3,74 +3,125 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>My YouTube Audio</title>
-
+<title>YouTube Audio Mode</title>
 <style>
-body {
-  margin: 0;
-  background: #f5f5f7;
-  color: #111;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-main { max-width:620px; margin:auto; padding:28px 18px; }
-h1 { font-size:30px; margin:4px 0 8px; }
-.sub { color:#666; line-height:1.45; }
-.card { background:white; border-radius:18px; padding:20px; margin-top:22px; box-shadow:0 1px 6px #0001; }
-.title { font-size:18px; font-weight:650; line-height:1.35; margin-bottom:18px; }
-button { width:100%; padding:15px; border:0; border-radius:12px; background:#111; color:white; font-size:17px; font-weight:650; }
-input { width:100%; box-sizing:border-box; padding:14px; border:1px solid #ccc; border-radius:12px; font-size:16px; margin:8px 0 12px; }
-.small { font-size:14px; color:#666; line-height:1.5; }
+*{box-sizing:border-box}
+html,body{margin:0;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:680px;margin:auto}
+.video-section{min-height:100vh;padding:18px;background:#111}
+h1{font-size:26px;margin:8px 0 6px}.sub{color:#aaa;margin:0 0 18px;line-height:1.4}
+.video-wrap{position:relative;width:100%;padding-top:56.25%;background:#000;border-radius:14px;overflow:hidden}
+#player{position:absolute;inset:0;width:100%;height:100%}
+.scroll-hint{text-align:center;color:#aaa;margin-top:24px;font-size:15px}
+.audio-mode{min-height:100vh;background:#000;padding:calc(24px + env(safe-area-inset-top)) 22px calc(30px + env(safe-area-inset-bottom));display:flex;flex-direction:column;justify-content:center}
+.title{font-size:20px;font-weight:650;line-height:1.35;text-align:center;margin-bottom:36px}
+.time{font-variant-numeric:tabular-nums;text-align:center;font-size:18px;color:#bbb;margin:16px 0}
+input[type=range]{width:100%;margin:10px 0 28px}
+.controls{display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:12px;align-items:center}
+button{border:1px solid #333;background:#151515;color:#fff;border-radius:18px;min-height:68px;font-size:18px;font-weight:650}
+#playPause{font-size:22px;min-height:82px}
+.saved{text-align:center;color:#777;font-size:13px;margin-top:24px;min-height:18px}
+.back{text-align:center;margin-top:36px}
+.back button{min-height:48px;padding:0 18px;font-size:15px}
 </style>
 </head>
 <body>
 <main>
-<h1>My YouTube Audio</h1>
-<p class="sub">Test 3 — open the video in Safari's desktop YouTube experience.</p>
+<section class="video-section" id="videoSection">
+<h1>YouTube Audio Mode</h1>
+<p class="sub">Start the video, then scroll down to the black audio controls.</p>
+<div class="video-wrap"><div id="player"></div></div>
+<div class="scroll-hint">↓ Scroll down for audio mode ↓</div>
+</section>
 
-<div class="card">
+<section class="audio-mode">
 <div class="title">Lesson 2 — Sleep On It: How REM Sleep Supercharges Creativity</div>
-<button onclick="openYouTube()">Open in Safari</button>
-<script>
-function openYouTube() {
-  window.location.href =
-    "https://www.youtube.com/redirect?q=" +
-    encodeURIComponent("https://www.youtube.com/watch?v=UZeokmLo-qQ");
-}
-</script>
-
-<p>
-<a href="https://www.youtube.com/watch?v=UZeokmLo-qQ">Test YouTube link</a>
-</p>
-
-<p class="small">
-After Safari opens the video, start playback and lock your iPhone.
-The aim is to reproduce the background-audio behaviour you already get manually.
-</p>
+<div class="time"><span id="current">0:00</span> / <span id="duration">0:00</span></div>
+<input id="seek" type="range" min="0" max="1000" value="0" aria-label="Playback position">
+<div class="controls">
+<button onclick="skip(-30)">−30 sec</button>
+<button id="playPause" onclick="togglePlay()">▶︎ Play</button>
+<button onclick="skip(30)">+30 sec</button>
 </div>
-
-<div class="card">
-<strong>Try another YouTube link</strong>
-<input id="url" type="url" placeholder="Paste a YouTube link">
-<button onclick="openCustom()">Open in Safari</button>
-</div>
-
-<script>
-const testUrl = "https://www.youtube.com/watch?v=UZeokmLo-qQ";
-function openVideo() { window.location.assign(testUrl); }
-function openCustom() {
-  const raw = document.getElementById("url").value.trim();
-  if (!raw) { alert("Paste a YouTube link first."); return; }
-  try {
-    const u = new URL(raw);
-    if (!/youtube\.com$|youtu\.be$/.test(u.hostname.replace(/^www\./,''))) {
-      alert("Please use a YouTube or youtu.be link."); return;
-    }
-    window.location.assign(raw);
-  } catch(e) { alert("That doesn't look like a valid URL."); }
-}
-</script>
-
-<!-- GitHub write access verified 2026-09-23 -->
+<div class="saved" id="saved"></div>
+<div class="back"><button onclick="document.getElementById('videoSection').scrollIntoView({behavior:'smooth'})">Show video</button></div>
+</section>
 </main>
+
+<script>
+const VIDEO_ID='UZeokmLo-qQ';
+const STORAGE_KEY='yt-audio-position-'+VIDEO_ID;
+let player, ready=false, dragging=false;
+
+const tag=document.createElement('script');
+tag.src='https://www.youtube.com/iframe_api';
+document.head.appendChild(tag);
+
+function onYouTubeIframeAPIReady(){
+  player=new YT.Player('player',{
+    videoId:VIDEO_ID,
+    playerVars:{playsinline:1,rel:0},
+    events:{
+      onReady:()=>{
+        ready=true;
+        const saved=parseFloat(localStorage.getItem(STORAGE_KEY)||'0');
+        if(saved>5) player.seekTo(saved,true);
+        updateUI();
+      },
+      onStateChange:updatePlayButton
+    }
+  });
+}
+
+function togglePlay(){
+  if(!ready)return;
+  const s=player.getPlayerState();
+  if(s===YT.PlayerState.PLAYING) player.pauseVideo(); else player.playVideo();
+}
+function skip(seconds){
+  if(!ready)return;
+  player.seekTo(Math.max(0,Math.min(player.getDuration()||Infinity,player.getCurrentTime()+seconds)),true);
+  updateUI();
+}
+function updatePlayButton(){
+  if(!ready)return;
+  document.getElementById('playPause').textContent=
+    player.getPlayerState()===YT.PlayerState.PLAYING?'❚❚ Pause':'▶︎ Play';
+}
+function fmt(sec){
+  sec=Math.max(0,Math.floor(sec||0));
+  const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+  return h? h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0') : m+':'+String(s).padStart(2,'0');
+}
+function updateUI(){
+  if(!ready)return;
+  const cur=player.getCurrentTime()||0,dur=player.getDuration()||0;
+  document.getElementById('current').textContent=fmt(cur);
+  document.getElementById('duration').textContent=fmt(dur);
+  if(!dragging&&dur) document.getElementById('seek').value=Math.round(cur/dur*1000);
+  updatePlayButton();
+}
+const seek=document.getElementById('seek');
+seek.addEventListener('input',()=>{dragging=true});
+seek.addEventListener('change',()=>{
+  if(ready&&player.getDuration()) player.seekTo(seek.value/1000*player.getDuration(),true);
+  dragging=false;
+});
+setInterval(()=>{
+  if(!ready)return;
+  updateUI();
+  const cur=player.getCurrentTime()||0;
+  if(cur>0){
+    localStorage.setItem(STORAGE_KEY,String(cur));
+    document.getElementById('saved').textContent='Position saved automatically';
+  }
+},1000);
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden&&ready){
+    const cur=player.getCurrentTime()||0;
+    if(cur>0)localStorage.setItem(STORAGE_KEY,String(cur));
+  }
+});
+</script>
 </body>
 </html>
