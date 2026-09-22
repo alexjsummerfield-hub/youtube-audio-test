@@ -25,6 +25,15 @@ button{border:1px solid #333;background:#151515;color:#fff;border-radius:18px;mi
 select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;padding:12px 16px;font-size:16px;margin:5px}
 .back{text-align:center;margin-top:36px}
 .back button{min-height:48px;padding:0 18px;font-size:15px}
+.library{background:#0b0b0b;padding:24px 18px 40px;border-top:1px solid #222}
+.library h2{margin:0 0 8px}.library p{color:#aaa;line-height:1.4}
+.add-row{display:flex;gap:8px;margin:16px 0;flex-wrap:wrap}
+.add-row input{flex:1;min-width:220px;background:#151515;color:#fff;border:1px solid #333;border-radius:12px;padding:13px;font-size:16px}
+.add-row button,.library-item button{min-height:46px;padding:0 14px;font-size:15px;border-radius:12px}
+.library-item{border-top:1px solid #222;padding:16px 0}
+.library-title{font-weight:650;line-height:1.35;margin-bottom:8px}
+.library-meta{color:#888;font-size:13px;margin-bottom:10px}
+.library-actions{display:flex;gap:8px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -65,11 +74,24 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 <div class="video-wrap"><div id="player"></div></div>
 <div class="back"><button id="backToControls">Back to audio controls</button></div>
 </section>
+<section class="library" id="library">
+<h2>Library</h2>
+<p>Paste a YouTube link to save it here.</p>
+<div class="add-row">
+<input id="youtubeUrl" type="url" inputmode="url" placeholder="Paste YouTube link">
+<button id="addVideo">Add</button>
+</div>
+<div id="libraryMessage" class="saved"></div>
+<div id="libraryList"></div>
+</section>
 </main>
 
 <script>
 const VIDEO_ID='UZeokmLo-qQ';
-const STORAGE_KEY='yt-audio-position-'+VIDEO_ID;
+let currentVideoId='UZeokmLo-qQ';
+const STORAGE_KEY_PREFIX='yt-audio-position-';
+let STORAGE_KEY=STORAGE_KEY_PREFIX+currentVideoId;
+const LIBRARY_KEY='yt-audio-library-v1';
 let player, ready=false, dragging=false;
 let sleepEndsAt=0, sleepInterval=null;
 
@@ -79,7 +101,7 @@ document.head.appendChild(tag);
 
 function onYouTubeIframeAPIReady(){
   player=new YT.Player('player',{
-    videoId:VIDEO_ID,
+    videoId:currentVideoId,
     playerVars:{playsinline:1,rel:0},
     events:{
       onReady:()=>{
@@ -181,6 +203,65 @@ function updateSleepTimer(){
   const s=totalSeconds%60;
   document.getElementById('sleepStatus').textContent='Pauses in '+m+':'+String(s).padStart(2,'0');
 }
+
+function extractVideoId(value){
+  try{
+    const u=new URL(value.trim());
+    if(u.hostname==='youtu.be') return u.pathname.split('/').filter(Boolean)[0]||null;
+    if(u.hostname.endsWith('youtube.com')){
+      if(u.pathname==='/watch') return u.searchParams.get('v');
+      const parts=u.pathname.split('/').filter(Boolean);
+      if(['shorts','embed','live'].includes(parts[0])) return parts[1]||null;
+    }
+  }catch(e){}
+  return null;
+}
+function getLibrary(){
+  try{return JSON.parse(localStorage.getItem(LIBRARY_KEY)||'[]')}catch(e){return []}
+}
+function saveLibrary(items){localStorage.setItem(LIBRARY_KEY,JSON.stringify(items))}
+function renderLibrary(){
+  const box=document.getElementById('libraryList');
+  const items=getLibrary();
+  box.innerHTML=items.length?'':'<p>No saved videos yet.</p>';
+  items.forEach(item=>{
+    const row=document.createElement('div'); row.className='library-item';
+    const title=document.createElement('div'); title.className='library-title'; title.textContent=item.title||('YouTube video '+item.id);
+    const pos=parseFloat(localStorage.getItem(STORAGE_KEY_PREFIX+item.id)||'0');
+    const meta=document.createElement('div'); meta.className='library-meta'; meta.textContent=pos>5?'Saved at '+fmt(pos):'Not started';
+    const actions=document.createElement('div'); actions.className='library-actions';
+    const play=document.createElement('button'); play.textContent='Play'; play.addEventListener('click',()=>loadLibraryVideo(item.id,item.title));
+    const remove=document.createElement('button'); remove.textContent='Remove'; remove.addEventListener('click',()=>{saveLibrary(getLibrary().filter(x=>x.id!==item.id));renderLibrary()});
+    actions.append(play,remove); row.append(title,meta,actions); box.appendChild(row);
+  });
+}
+function loadLibraryVideo(id,title){
+  if(ready){
+    const cur=player.getCurrentTime()||0;
+    if(cur>0)localStorage.setItem(STORAGE_KEY,String(cur));
+    currentVideoId=id; STORAGE_KEY=STORAGE_KEY_PREFIX+id;
+    document.querySelector('.title').textContent=title||('YouTube video '+id);
+    player.loadVideoById(id);
+    const saved=parseFloat(localStorage.getItem(STORAGE_KEY)||'0');
+    if(saved>5)setTimeout(()=>player.seekTo(saved,true),500);
+    document.getElementById('audioMode').scrollIntoView({behavior:'smooth'});
+  }
+}
+document.getElementById('addVideo').addEventListener('click',async()=>{
+  const input=document.getElementById('youtubeUrl');
+  const id=extractVideoId(input.value);
+  const msg=document.getElementById('libraryMessage');
+  if(!id){msg.textContent='That does not look like a YouTube video link.';return}
+  let title='YouTube video '+id;
+  try{
+    const r=await fetch('https://www.youtube.com/oembed?url='+encodeURIComponent('https://www.youtube.com/watch?v='+id)+'&format=json');
+    if(r.ok){const data=await r.json(); if(data.title)title=data.title}
+  }catch(e){}
+  const items=getLibrary();
+  if(!items.some(x=>x.id===id)){items.unshift({id,title});saveLibrary(items)}
+  input.value='';msg.textContent='Saved to library';renderLibrary();
+});
+renderLibrary();
 
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden&&ready){
