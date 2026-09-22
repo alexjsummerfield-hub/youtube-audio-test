@@ -89,21 +89,19 @@ Test 3 — open the video in Safari's desktop YouTube experience.
 Lesson 2 — Sleep On It: How REM Sleep Supercharges Creativity
 </div>
 
-<button onclick="location.href='https://www.youtube.com/watch?v=UZeokmLo-qQ'">
-Test 1
+<button onclick="openYouTube()">
+Test Safari Route
 </button>
 
-<br><br>
-
-<button onclick="location.replace('https://www.youtube.com/watch?v=UZeokmLo-qQ')">
-Test 2
-</button>
-
-<br><br>
-
-<button onclick="window.open('https://www.youtube.com/watch?v=UZeokmLo-qQ','_self')">
-Test 3
-</button>
+<script>
+function openYouTube() {
+  window.location.href =
+    "https://www.youtube.com/redirect?q=" +
+    encodeURIComponent(
+      "https://www.youtube.com/watch?v=UZeokmLo-qQ"
+    );
+}
+</script>
 <p class="small">
 After Safari opens the video, start playback and lock your iPhone.
 The aim is to reproduce the background-audio behaviour you already get manually.
