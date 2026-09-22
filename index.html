@@ -27,14 +27,7 @@ button{border:1px solid #333;background:#151515;color:#fff;border-radius:18px;mi
 </head>
 <body>
 <main>
-<section class="video-section" id="videoSection">
-<h1>YouTube Audio Mode</h1>
-<p class="sub">Start the video, then scroll down to the black audio controls.</p>
-<div class="video-wrap"><div id="player"></div></div>
-<div class="scroll-hint">↓ Scroll down for audio mode ↓</div>
-</section>
-
-<section class="audio-mode">
+<section class="audio-mode" id="audioMode">
 <div class="title">Lesson 2 — Sleep On It: How REM Sleep Supercharges Creativity</div>
 <div class="time"><span id="current">0:00</span> / <span id="duration">0:00</span></div>
 <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Playback position">
@@ -45,6 +38,13 @@ button{border:1px solid #333;background:#151515;color:#fff;border-radius:18px;mi
 </div>
 <div class="saved" id="saved"></div>
 <div class="back"><button onclick="document.getElementById('videoSection').scrollIntoView({behavior:'smooth'})">Show video</button></div>
+</section>
+
+<section class="video-section" id="videoSection">
+<h1>YouTube video</h1>
+<p class="sub">Scroll here only when you want to see the video.</p>
+<div class="video-wrap"><div id="player"></div></div>
+<div class="back"><button id="backToControls">Back to audio controls</button></div>
 </section>
 </main>
 
@@ -116,6 +116,8 @@ setInterval(()=>{
     document.getElementById('saved').textContent='Position saved automatically';
   }
 },1000);
+document.getElementById('backToControls').addEventListener('click',()=>document.getElementById('audioMode').scrollIntoView({behavior:'smooth'}));
+
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden&&ready){
     const cur=player.getCurrentTime()||0;
