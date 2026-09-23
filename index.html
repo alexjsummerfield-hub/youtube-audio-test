@@ -43,7 +43,7 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 <main>
 <div id="libraryView" class="view active">
 <section class="library" id="library">
-<h2>Library</h2>
+<h2>Library <span id="libraryCount"></span></h2>
 <p>Paste a YouTube link to save it here.</p>
 <div class="add-row">
 <input id="youtubeUrl" type="url" inputmode="url" placeholder="Paste YouTube link">
@@ -232,7 +232,13 @@ function saveLibrary(items){localStorage.setItem(LIBRARY_KEY,JSON.stringify(item
 function renderLibrary(){
   const box=document.getElementById('libraryList');
   const items=getLibrary();
-  box.innerHTML=items.length?'':'<p>No saved videos yet.</p>';
+  document.getElementById('libraryCount').textContent='('+items.length+')';
+  box.replaceChildren();
+  if(!items.length){
+    const empty=document.createElement('p');
+    empty.textContent='No saved videos yet.';
+    box.appendChild(empty);
+  }
   items.forEach(item=>{
     const row=document.createElement('div'); row.className='library-item';
     const title=document.createElement('div'); title.className='library-title'; title.textContent=item.title||('YouTube video '+item.id);
@@ -276,6 +282,8 @@ async function addVideoToLibrary(){
   input.value='';
   msg.textContent='Saved to library';
   renderLibrary();
+  const first=document.querySelector('#libraryList .library-item');
+  if(first) first.scrollIntoView({behavior:'smooth',block:'nearest'});
 
   try{
     const r=await fetch('https://www.youtube.com/oembed?url='+encodeURIComponent('https://www.youtube.com/watch?v='+id)+'&format=json');
