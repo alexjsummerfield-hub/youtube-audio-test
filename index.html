@@ -263,20 +263,34 @@ function loadLibraryVideo(id,title){
     showView('player');
   }
 }
-document.getElementById('addVideo').addEventListener('click',async()=>{
+async function addVideoToLibrary(){
   const input=document.getElementById('youtubeUrl');
   const id=extractVideoId(input.value);
   const msg=document.getElementById('libraryMessage');
   if(!id){msg.textContent='That does not look like a YouTube video link.';return}
-  let title='YouTube video '+id;
+  const items=getLibrary();
+  if(!items.some(x=>x.id===id)){
+    items.unshift({id,title:'YouTube video '+id});
+    saveLibrary(items);
+  }
+  input.value='';
+  msg.textContent='Saved to library';
+  renderLibrary();
+
   try{
     const r=await fetch('https://www.youtube.com/oembed?url='+encodeURIComponent('https://www.youtube.com/watch?v='+id)+'&format=json');
-    if(r.ok){const data=await r.json(); if(data.title)title=data.title}
+    if(r.ok){
+      const data=await r.json();
+      if(data.title){
+        const updated=getLibrary();
+        const item=updated.find(x=>x.id===id);
+        if(item){item.title=data.title;saveLibrary(updated);renderLibrary()}
+      }
+    }
   }catch(e){}
-  const items=getLibrary();
-  if(!items.some(x=>x.id===id)){items.unshift({id,title});saveLibrary(items)}
-  input.value='';msg.textContent='Saved to library';renderLibrary();
-});
+}
+document.getElementById('addVideo').addEventListener('click',addVideoToLibrary);
+document.getElementById('youtubeUrl').addEventListener('keydown',e=>{if(e.key==='Enter')addVideoToLibrary()});
 renderLibrary();
 
 document.addEventListener('visibilitychange',()=>{
