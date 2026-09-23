@@ -36,8 +36,14 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 .library-item{border-top:1px solid #222;padding:16px 0}
 .library-title{font-weight:650;line-height:1.35;margin-bottom:8px}
 .library-meta{color:#888;font-size:13px;margin-bottom:10px}
-.library-actions{display:flex;gap:8px;flex-wrap:wrap}
-.library-actions .move{min-width:46px;padding:0 12px;font-size:20px}
+.library-item{cursor:pointer;border-radius:10px;padding-left:10px;padding-right:10px}
+.library-item.selected{background:#1c1c1c;outline:1px solid #444}
+.library-select{display:flex;gap:12px;align-items:flex-start}
+.library-select input{margin-top:3px;width:20px;height:20px;flex:0 0 auto}
+.library-text{min-width:0;flex:1}
+.library-toolbar{position:sticky;bottom:0;display:grid;grid-template-columns:1.3fr .8fr .8fr 1.2fr;gap:8px;padding:10px 0 calc(10px + env(safe-area-inset-bottom));background:#0b0b0b;border-top:1px solid #333}
+.library-toolbar button{min-height:52px;font-size:16px;border-radius:12px}
+.library-toolbar button:disabled{opacity:.35}
 </style>
 </head>
 <body>
@@ -52,6 +58,12 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 </div>
 <div id="libraryMessage" class="saved"></div>
 <div id="libraryList"></div>
+<div class="library-toolbar">
+<button id="selectedPlay">▶︎ Play</button>
+<button id="selectedUp">↑</button>
+<button id="selectedDown">↓</button>
+<button id="selectedRemove">Remove</button>
+</div>
 </section>
 </div>
 
@@ -230,9 +242,11 @@ function getLibrary(){
   try{return JSON.parse(localStorage.getItem(LIBRARY_KEY)||'[]')}catch(e){return []}
 }
 function saveLibrary(items){localStorage.setItem(LIBRARY_KEY,JSON.stringify(items))}
+let selectedLibraryId=null;
 function renderLibrary(){
   const box=document.getElementById('libraryList');
   const items=getLibrary();
+  if(selectedLibraryId&&!items.some(x=>x.id===selectedLibraryId))selectedLibraryId=null;
   document.getElementById('libraryCount').textContent='('+items.length+')';
   box.replaceChildren();
   if(!items.length){
@@ -241,17 +255,27 @@ function renderLibrary(){
     box.appendChild(empty);
   }
   items.forEach(item=>{
-    const row=document.createElement('div'); row.className='library-item';
+    const row=document.createElement('div');
+    row.className='library-item'+(item.id===selectedLibraryId?' selected':'');
+    const select=document.createElement('div'); select.className='library-select';
+    const radio=document.createElement('input'); radio.type='radio'; radio.name='librarySelection'; radio.checked=item.id===selectedLibraryId; radio.setAttribute('aria-label','Select '+(item.title||'video'));
+    const textWrap=document.createElement('div'); textWrap.className='library-text';
     const title=document.createElement('div'); title.className='library-title'; title.textContent=item.title||('YouTube video '+item.id);
     const pos=parseFloat(localStorage.getItem(STORAGE_KEY_PREFIX+item.id)||'0');
     const meta=document.createElement('div'); meta.className='library-meta'; meta.textContent=pos>5?'Saved at '+fmt(pos):'Not started';
-    const actions=document.createElement('div'); actions.className='library-actions';
-    const play=document.createElement('button'); play.textContent='Play'; play.addEventListener('click',()=>loadLibraryVideo(item.id,item.title));
-    const up=document.createElement('button'); up.textContent='↑'; up.className='move'; up.setAttribute('aria-label','Move up'); up.disabled=items.indexOf(item)===0; up.addEventListener('click',()=>moveLibraryItem(item.id,-1));
-    const down=document.createElement('button'); down.textContent='↓'; down.className='move'; down.setAttribute('aria-label','Move down'); down.disabled=items.indexOf(item)===items.length-1; down.addEventListener('click',()=>moveLibraryItem(item.id,1));
-    const remove=document.createElement('button'); remove.textContent='Remove'; remove.addEventListener('click',()=>{saveLibrary(getLibrary().filter(x=>x.id!==item.id));renderLibrary()});
-    actions.append(play,up,down,remove); row.append(title,meta,actions); box.appendChild(row);
+    textWrap.append(title,meta); select.append(radio,textWrap); row.append(select);
+    row.addEventListener('click',()=>{selectedLibraryId=item.id;renderLibrary()});
+    box.appendChild(row);
   });
+  updateLibraryToolbar();
+}
+function updateLibraryToolbar(){
+  const items=getLibrary();
+  const i=items.findIndex(x=>x.id===selectedLibraryId);
+  document.getElementById('selectedPlay').disabled=i<0;
+  document.getElementById('selectedUp').disabled=i<=0;
+  document.getElementById('selectedDown').disabled=i<0||i>=items.length-1;
+  document.getElementById('selectedRemove').disabled=i<0;
 }
 function moveLibraryItem(id,direction){
   const items=getLibrary();
@@ -262,6 +286,18 @@ function moveLibraryItem(id,direction){
   saveLibrary(items);
   renderLibrary();
 }
+document.getElementById('selectedPlay').addEventListener('click',()=>{
+  const item=getLibrary().find(x=>x.id===selectedLibraryId);
+  if(item)loadLibraryVideo(item.id,item.title);
+});
+document.getElementById('selectedUp').addEventListener('click',()=>moveLibraryItem(selectedLibraryId,-1));
+document.getElementById('selectedDown').addEventListener('click',()=>moveLibraryItem(selectedLibraryId,1));
+document.getElementById('selectedRemove').addEventListener('click',()=>{
+  if(!selectedLibraryId)return;
+  saveLibrary(getLibrary().filter(x=>x.id!==selectedLibraryId));
+  selectedLibraryId=null;
+  renderLibrary();
+});
 function showView(name){
   document.getElementById('libraryView').classList.toggle('active',name==='library');
   document.getElementById('playerView').classList.toggle('active',name==='player');
