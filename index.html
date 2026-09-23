@@ -8,6 +8,9 @@
 *{box-sizing:border-box}
 html,body{margin:0;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{max-width:680px;margin:auto}
+.view{display:none}.view.active{display:block}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:calc(14px + env(safe-area-inset-top)) 18px 12px;background:#0b0b0b;border-bottom:1px solid #222}
+.topbar strong{font-size:20px}.topbar button{min-height:44px;padding:0 14px;font-size:15px;border-radius:12px}
 .video-section{min-height:100vh;padding:18px;background:#111}
 h1{font-size:26px;margin:8px 0 6px}.sub{color:#aaa;margin:0 0 18px;line-height:1.4}
 .video-wrap{position:relative;width:100%;padding-top:56.25%;background:#000;border-radius:14px;overflow:hidden}
@@ -25,7 +28,7 @@ button{border:1px solid #333;background:#151515;color:#fff;border-radius:18px;mi
 select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;padding:12px 16px;font-size:16px;margin:5px}
 .back{text-align:center;margin-top:36px}
 .back button{min-height:48px;padding:0 18px;font-size:15px}
-.library{background:#0b0b0b;padding:24px 18px 40px;border-top:1px solid #222}
+.library{background:#0b0b0b;padding:24px 18px 40px;min-height:100vh}
 .library h2{margin:0 0 8px}.library p{color:#aaa;line-height:1.4}
 .add-row{display:flex;gap:8px;margin:16px 0;flex-wrap:wrap}
 .add-row input{flex:1;min-width:220px;background:#151515;color:#fff;border:1px solid #333;border-radius:12px;padding:13px;font-size:16px}
@@ -38,6 +41,21 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 </head>
 <body>
 <main>
+<div id="libraryView" class="view active">
+<section class="library" id="library">
+<h2>Library</h2>
+<p>Paste a YouTube link to save it here.</p>
+<div class="add-row">
+<input id="youtubeUrl" type="url" inputmode="url" placeholder="Paste YouTube link">
+<button id="addVideo">Add</button>
+</div>
+<div id="libraryMessage" class="saved"></div>
+<div id="libraryList"></div>
+</section>
+</div>
+
+<div id="playerView" class="view">
+<div class="topbar"><strong>Player</strong><button id="openLibrary">Library</button></div>
 <section class="audio-mode" id="audioMode">
 <div class="title">Lesson 2 — Sleep On It: How REM Sleep Supercharges Creativity</div>
 <div class="time"><span id="current">0:00</span> / <span id="duration">0:00</span></div>
@@ -74,16 +92,7 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 <div class="video-wrap"><div id="player"></div></div>
 <div class="back"><button id="backToControls">Back to audio controls</button></div>
 </section>
-<section class="library" id="library">
-<h2>Library</h2>
-<p>Paste a YouTube link to save it here.</p>
-<div class="add-row">
-<input id="youtubeUrl" type="url" inputmode="url" placeholder="Paste YouTube link">
-<button id="addVideo">Add</button>
 </div>
-<div id="libraryMessage" class="saved"></div>
-<div id="libraryList"></div>
-</section>
 </main>
 
 <script>
@@ -235,6 +244,13 @@ function renderLibrary(){
     actions.append(play,remove); row.append(title,meta,actions); box.appendChild(row);
   });
 }
+function showView(name){
+  document.getElementById('libraryView').classList.toggle('active',name==='library');
+  document.getElementById('playerView').classList.toggle('active',name==='player');
+  window.scrollTo(0,0);
+}
+document.getElementById('openLibrary').addEventListener('click',()=>{renderLibrary();showView('library')});
+
 function loadLibraryVideo(id,title){
   if(ready){
     const cur=player.getCurrentTime()||0;
@@ -244,7 +260,7 @@ function loadLibraryVideo(id,title){
     player.loadVideoById(id);
     const saved=parseFloat(localStorage.getItem(STORAGE_KEY)||'0');
     if(saved>5)setTimeout(()=>player.seekTo(saved,true),500);
-    document.getElementById('audioMode').scrollIntoView({behavior:'smooth'});
+    showView('player');
   }
 }
 document.getElementById('addVideo').addEventListener('click',async()=>{
