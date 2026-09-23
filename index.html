@@ -274,16 +274,17 @@ async function addVideoToLibrary(){
   const id=extractVideoId(input.value);
   const msg=document.getElementById('libraryMessage');
   if(!id){msg.textContent='That does not look like a YouTube video link.';return}
-  const items=getLibrary();
-  if(!items.some(x=>x.id===id)){
-    items.unshift({id,title:'YouTube video '+id});
-    saveLibrary(items);
-  }
+  let items=getLibrary();
+  const existing=items.find(x=>x.id===id);
+  items=items.filter(x=>x.id!==id);
+  items.unshift({id,title:(existing&&existing.title)||('YouTube video '+id)});
+  saveLibrary(items);
   input.value='';
-  msg.textContent='Saved to library';
+  msg.textContent='Added: '+((existing&&existing.title)||('YouTube video '+id));
   renderLibrary();
   const first=document.querySelector('#libraryList .library-item');
   if(first) first.scrollIntoView({behavior:'smooth',block:'nearest'});
+  setTimeout(()=>{if(msg.textContent.startsWith('Added:'))msg.textContent=''},2500);
 
   try{
     const r=await fetch('https://www.youtube.com/oembed?url='+encodeURIComponent('https://www.youtube.com/watch?v='+id)+'&format=json');
