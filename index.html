@@ -37,6 +37,7 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 .library-title{font-weight:650;line-height:1.35;margin-bottom:8px}
 .library-meta{color:#888;font-size:13px;margin-bottom:10px}
 .library-actions{display:flex;gap:8px;flex-wrap:wrap}
+.library-actions .move{min-width:46px;padding:0 12px;font-size:20px}
 </style>
 </head>
 <body>
@@ -246,9 +247,20 @@ function renderLibrary(){
     const meta=document.createElement('div'); meta.className='library-meta'; meta.textContent=pos>5?'Saved at '+fmt(pos):'Not started';
     const actions=document.createElement('div'); actions.className='library-actions';
     const play=document.createElement('button'); play.textContent='Play'; play.addEventListener('click',()=>loadLibraryVideo(item.id,item.title));
+    const up=document.createElement('button'); up.textContent='↑'; up.className='move'; up.setAttribute('aria-label','Move up'); up.disabled=items.indexOf(item)===0; up.addEventListener('click',()=>moveLibraryItem(item.id,-1));
+    const down=document.createElement('button'); down.textContent='↓'; down.className='move'; down.setAttribute('aria-label','Move down'); down.disabled=items.indexOf(item)===items.length-1; down.addEventListener('click',()=>moveLibraryItem(item.id,1));
     const remove=document.createElement('button'); remove.textContent='Remove'; remove.addEventListener('click',()=>{saveLibrary(getLibrary().filter(x=>x.id!==item.id));renderLibrary()});
-    actions.append(play,remove); row.append(title,meta,actions); box.appendChild(row);
+    actions.append(play,up,down,remove); row.append(title,meta,actions); box.appendChild(row);
   });
+}
+function moveLibraryItem(id,direction){
+  const items=getLibrary();
+  const i=items.findIndex(x=>x.id===id);
+  const j=i+direction;
+  if(i<0||j<0||j>=items.length)return;
+  [items[i],items[j]]=[items[j],items[i]];
+  saveLibrary(items);
+  renderLibrary();
 }
 function showView(name){
   document.getElementById('libraryView').classList.toggle('active',name==='library');
