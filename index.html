@@ -9,14 +9,15 @@
 html,body{margin:0;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{max-width:680px;margin:auto}
 .view{display:none}.view.active{display:block}
-.topbar{display:flex;justify-content:space-between;align-items:center;padding:calc(14px + env(safe-area-inset-top)) 18px 12px;background:#0b0b0b;border-bottom:1px solid #222}
-.topbar strong{font-size:20px}.topbar button{min-height:44px;padding:0 14px;font-size:15px;border-radius:12px}
+.app-nav{position:sticky;top:0;z-index:20;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 12px 8px;background:#0b0b0b;border-bottom:1px solid #222}
+.app-nav button{min-height:46px;padding:0 10px;font-size:16px;border-radius:12px}
+.app-nav button.active{background:#fff;color:#000;border-color:#fff}
 .video-section{min-height:100vh;padding:18px;background:#111}
 h1{font-size:26px;margin:8px 0 6px}.sub{color:#aaa;margin:0 0 18px;line-height:1.4}
 .video-wrap{position:relative;width:100%;padding-top:56.25%;background:#000;border-radius:14px;overflow:hidden}
 #player{position:absolute;inset:0;width:100%;height:100%}
 .scroll-hint{text-align:center;color:#aaa;margin-top:24px;font-size:15px}
-.audio-mode{min-height:100vh;background:#000;padding:calc(24px + env(safe-area-inset-top)) 22px calc(30px + env(safe-area-inset-bottom));display:flex;flex-direction:column;justify-content:center}
+.audio-mode{min-height:calc(100vh - 64px);background:#000;padding:calc(24px + env(safe-area-inset-top)) 22px calc(30px + env(safe-area-inset-bottom));display:flex;flex-direction:column;justify-content:center}
 .title{font-size:20px;font-weight:650;line-height:1.35;text-align:center;margin-bottom:36px}
 .time{font-variant-numeric:tabular-nums;text-align:center;font-size:18px;color:#bbb;margin:16px 0}
 input[type=range]{width:100%;margin:10px 0 28px}
@@ -48,27 +49,19 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 </head>
 <body>
 <main>
-<div id="libraryView" class="view active">
-<section class="library" id="library">
-<h2>Library <span id="libraryCount"></span></h2>
-<p>Paste a YouTube link to save it here.</p>
-<div class="add-row">
-<input id="youtubeUrl" type="url" inputmode="url" placeholder="Paste YouTube link">
-<button id="addVideo">Add</button>
-</div>
-<div id="libraryMessage" class="saved"></div>
-<div id="libraryList"></div>
-<div class="library-toolbar">
-<button id="selectedPlay">▶︎ Play</button>
-<button id="selectedUp">↑</button>
-<button id="selectedDown">↓</button>
-<button id="selectedRemove">Remove</button>
-</div>
+<nav class="app-nav" aria-label="Main views">
+<button id="navVideo">Video</button>
+<button id="navAudio">Audio</button>
+<button id="navLibrary" class="active">Library</button>
+</nav>
+<div id="videoView" class="view">
+<section class="video-section" id="videoSection">
+<h1>Video</h1>
+<p class="sub">Use the YouTube player here whenever you want to see the video or interact with an ad.</p>
+<div class="video-wrap"><div id="player"></div></div>
 </section>
 </div>
-
-<div id="playerView" class="view">
-<div class="topbar"><strong>Player</strong><button id="openLibrary">Library</button></div>
+<div id="audioView" class="view">
 <section class="audio-mode" id="audioMode">
 <div class="title">Lesson 2 — Sleep On It: How REM Sleep Supercharges Creativity</div>
 <div class="time"><span id="current">0:00</span> / <span id="duration">0:00</span></div>
@@ -96,14 +89,24 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 </select>
 <div class="saved" id="sleepStatus"></div>
 </div>
-<div class="back"><button onclick="document.getElementById('videoSection').scrollIntoView({behavior:'smooth'})">Show video</button></div>
 </section>
-
-<section class="video-section" id="videoSection">
-<h1>YouTube video</h1>
-<p class="sub">Scroll here only when you want to see the video.</p>
-<div class="video-wrap"><div id="player"></div></div>
-<div class="back"><button id="backToControls">Back to audio controls</button></div>
+</div>
+<div id="libraryView" class="view active">
+<section class="library" id="library">
+<h2>Library <span id="libraryCount"></span></h2>
+<p>Paste a YouTube link to save it here.</p>
+<div class="add-row">
+<input id="youtubeUrl" type="url" inputmode="url" placeholder="Paste YouTube link">
+<button id="addVideo">Add</button>
+</div>
+<div id="libraryMessage" class="saved"></div>
+<div id="libraryList"></div>
+<div class="library-toolbar">
+<button id="selectedPlay">▶︎ Play</button>
+<button id="selectedUp">↑</button>
+<button id="selectedDown">↓</button>
+<button id="selectedRemove">Remove</button>
+</div>
 </section>
 </div>
 </main>
@@ -180,8 +183,6 @@ setInterval(()=>{
     document.getElementById('saved').textContent='Position saved automatically';
   }
 },1000);
-document.getElementById('backToControls').addEventListener('click',()=>document.getElementById('audioMode').scrollIntoView({behavior:'smooth'}));
-
 document.getElementById('speedControl').addEventListener('change',function(){
   if(!ready)return;
   const requested=Number(this.value);
@@ -299,11 +300,18 @@ document.getElementById('selectedRemove').addEventListener('click',()=>{
   renderLibrary();
 });
 function showView(name){
+  document.getElementById('videoView').classList.toggle('active',name==='video');
+  document.getElementById('audioView').classList.toggle('active',name==='audio');
   document.getElementById('libraryView').classList.toggle('active',name==='library');
-  document.getElementById('playerView').classList.toggle('active',name==='player');
+  document.getElementById('navVideo').classList.toggle('active',name==='video');
+  document.getElementById('navAudio').classList.toggle('active',name==='audio');
+  document.getElementById('navLibrary').classList.toggle('active',name==='library');
+  if(name==='library')renderLibrary();
   window.scrollTo(0,0);
 }
-document.getElementById('openLibrary').addEventListener('click',()=>{renderLibrary();showView('library')});
+document.getElementById('navVideo').addEventListener('click',()=>showView('video'));
+document.getElementById('navAudio').addEventListener('click',()=>showView('audio'));
+document.getElementById('navLibrary').addEventListener('click',()=>showView('library'));
 
 function loadLibraryVideo(id,title){
   if(ready){
@@ -314,7 +322,7 @@ function loadLibraryVideo(id,title){
     player.loadVideoById(id);
     const saved=parseFloat(localStorage.getItem(STORAGE_KEY)||'0');
     if(saved>5)setTimeout(()=>player.seekTo(saved,true),500);
-    showView('player');
+    showView('audio');
   }
 }
 async function addVideoToLibrary(){
