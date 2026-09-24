@@ -45,6 +45,11 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 .library-toolbar{position:sticky;bottom:0;display:grid;grid-template-columns:1.3fr .8fr .8fr 1.2fr;gap:8px;padding:10px 0 calc(10px + env(safe-area-inset-bottom));background:#0b0b0b;border-top:1px solid #333}
 .library-toolbar button{min-height:52px;font-size:16px;border-radius:12px}
 .library-toolbar button:disabled{opacity:.35}
+.library-folder{font-weight:700}
+.folder-count{color:#888;font-size:13px;margin-top:6px}
+.folder-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.folder-header button{min-height:42px;padding:0 12px;font-size:15px;border-radius:12px}
+.library-toolbar{grid-template-columns:1.2fr .7fr .7fr 1fr 1.1fr}
 </style>
 </head>
 <body>
@@ -105,6 +110,7 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 <button id="selectedPlay">▶︎ Play</button>
 <button id="selectedUp">↑</button>
 <button id="selectedDown">↓</button>
+<button id="selectedMove">Move</button>
 <button id="selectedRemove">Remove</button>
 </div>
 </section>
@@ -243,18 +249,46 @@ function getLibrary(){
   try{return JSON.parse(localStorage.getItem(LIBRARY_KEY)||'[]')}catch(e){return []}
 }
 function saveLibrary(items){localStorage.setItem(LIBRARY_KEY,JSON.stringify(items))}
+const FOLDERS_KEY='yt-audio-folders-v1';
+function getFolders(){
+  try{return JSON.parse(localStorage.getItem(FOLDERS_KEY)||'[]')}catch(e){return []}
+}
+function saveFolders(items){localStorage.setItem(FOLDERS_KEY,JSON.stringify(items))}
 let selectedLibraryId=null;
+let currentFolderId=null;
 function renderLibrary(){
   const box=document.getElementById('libraryList');
-  const items=getLibrary();
+  const allItems=getLibrary();
+  const folders=getFolders();
+  const items=allItems.filter(x=>(x.folderId||null)===currentFolderId);
   if(selectedLibraryId&&!items.some(x=>x.id===selectedLibraryId))selectedLibraryId=null;
-  document.getElementById('libraryCount').textContent='('+items.length+')';
+  document.getElementById('libraryCount').textContent='('+allItems.length+')';
   box.replaceChildren();
-  if(!items.length){
-    const empty=document.createElement('p');
-    empty.textContent='No saved videos yet.';
-    box.appendChild(empty);
+
+  if(currentFolderId){
+    const folder=folders.find(x=>x.id===currentFolderId);
+    const header=document.createElement('div'); header.className='folder-header';
+    const back=document.createElement('button'); back.textContent='← Library'; back.addEventListener('click',()=>{currentFolderId=null;selectedLibraryId=null;renderLibrary()});
+    const name=document.createElement('strong'); name.textContent=folder?folder.name:'Folder';
+    header.append(back,name); box.appendChild(header);
+  } else {
+    folders.forEach(folder=>{
+      const count=allItems.filter(x=>x.folderId===folder.id).length;
+      const row=document.createElement('div'); row.className='library-item library-folder';
+      const title=document.createElement('div'); title.className='library-title'; title.textContent='📁 '+folder.name;
+      const meta=document.createElement('div'); meta.className='folder-count'; meta.textContent=count+' item'+(count===1?'':'s');
+      row.append(title,meta);
+      row.addEventListener('click',()=>{currentFolderId=folder.id;selectedLibraryId=null;renderLibrary()});
+      box.appendChild(row);
+    });
   }
+
+  if(!items.length&&!folders.length&&!currentFolderId){
+    const empty=document.createElement('p'); empty.textContent='No saved videos yet.'; box.appendChild(empty);
+  } else if(!items.length&&currentFolderId){
+    const empty=document.createElement('p'); empty.textContent='This folder is empty.'; box.appendChild(empty);
+  }
+
   items.forEach(item=>{
     const row=document.createElement('div');
     row.className='library-item'+(item.id===selectedLibraryId?' selected':'');
@@ -271,20 +305,47 @@ function renderLibrary(){
   updateLibraryToolbar();
 }
 function updateLibraryToolbar(){
-  const items=getLibrary();
-  const i=items.findIndex(x=>x.id===selectedLibraryId);
+  const all=getLibrary();
+  const visible=all.filter(x=>(x.folderId||null)===currentFolderId);
+  const i=visible.findIndex(x=>x.id===selectedLibraryId);
   document.getElementById('selectedPlay').disabled=i<0;
   document.getElementById('selectedUp').disabled=i<=0;
-  document.getElementById('selectedDown').disabled=i<0||i>=items.length-1;
+  document.getElementById('selectedDown').disabled=i<0||i>=visible.length-1;
+  document.getElementById('selectedMove').disabled=i<0;
   document.getElementById('selectedRemove').disabled=i<0;
 }
 function moveLibraryItem(id,direction){
+  const all=getLibrary();
+  const visibleIndexes=[];
+  all.forEach((x,i)=>{if((x.folderId||null)===currentFolderId)visibleIndexes.push(i)});
+  const pos=visibleIndexes.findIndex(i=>all[i].id===id);
+  const next=pos+direction;
+  if(pos<0||next<0||next>=visibleIndexes.length)return;
+  const i=visibleIndexes[pos],j=visibleIndexes[next];
+  [all[i],all[j]]=[all[j],all[i]];
+  saveLibrary(all);
+  renderLibrary();
+}
+function moveSelectedItem(){
+  if(!selectedLibraryId)return;
+  const folders=getFolders();
+  const choices=['Main Library',...folders.map(x=>x.name),'＋ New folder'];
+  const answer=prompt('Move to:\n'+choices.map((x,i)=>(i+1)+'. '+x).join('\n')+'\n\nEnter a number:');
+  if(answer===null)return;
+  const n=Number(answer);
+  let target=null;
+  if(n===choices.length){
+    const name=prompt('Folder name:');
+    if(!name||!name.trim())return;
+    const folder={id:'f-'+Date.now(),name:name.trim()};
+    folders.push(folder); saveFolders(folders); target=folder.id;
+  } else if(n===1) target=null;
+  else if(n>=2&&n<=folders.length+1) target=folders[n-2].id;
+  else return;
   const items=getLibrary();
-  const i=items.findIndex(x=>x.id===id);
-  const j=i+direction;
-  if(i<0||j<0||j>=items.length)return;
-  [items[i],items[j]]=[items[j],items[i]];
-  saveLibrary(items);
+  const item=items.find(x=>x.id===selectedLibraryId);
+  if(item){if(target)item.folderId=target;else delete item.folderId;saveLibrary(items)}
+  selectedLibraryId=null;
   renderLibrary();
 }
 document.getElementById('selectedPlay').addEventListener('click',()=>{
@@ -293,6 +354,7 @@ document.getElementById('selectedPlay').addEventListener('click',()=>{
 });
 document.getElementById('selectedUp').addEventListener('click',()=>moveLibraryItem(selectedLibraryId,-1));
 document.getElementById('selectedDown').addEventListener('click',()=>moveLibraryItem(selectedLibraryId,1));
+document.getElementById('selectedMove').addEventListener('click',moveSelectedItem);
 document.getElementById('selectedRemove').addEventListener('click',()=>{
   if(!selectedLibraryId)return;
   saveLibrary(getLibrary().filter(x=>x.id!==selectedLibraryId));
@@ -311,7 +373,7 @@ function showView(name){
 }
 document.getElementById('navVideo').addEventListener('click',()=>showView('video'));
 document.getElementById('navAudio').addEventListener('click',()=>showView('audio'));
-document.getElementById('navLibrary').addEventListener('click',()=>showView('library'));
+document.getElementById('navLibrary').addEventListener('click',()=>{currentFolderId=null;selectedLibraryId=null;showView('library')});
 
 function loadLibraryVideo(id,title){
   if(ready){
