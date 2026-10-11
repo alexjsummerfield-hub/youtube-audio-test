@@ -58,6 +58,16 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 .modal-sheet h3{margin:0 0 14px;font-size:20px}
 .modal-option{display:block;width:100%;min-height:54px;text-align:left;padding:0 16px;margin:8px 0;border-radius:12px;font-size:17px}
 .modal-cancel{width:100%;min-height:50px;margin-top:12px;border-radius:12px;font-size:16px}
+button:disabled,input:disabled,select:disabled{opacity:.35}
+#videoPlaceholder{position:absolute;inset:0;display:grid;place-items:center;color:#aaa}
+#videoPlaceholder[hidden]{display:none}
+#pocketShield{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:24px;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+#pocketShield[hidden]{display:none}
+#pocketShield.awake{background:rgba(0,0,0,.85)}
+#pocketHint{color:#666;text-align:center}
+#pocketUnlock{padding:0 32px;min-height:64px;touch-action:manipulation}
+#pocketUnlock[hidden]{display:none}
+body.pocket-locked{overflow:hidden}
 </style>
 </head>
 <body>
@@ -71,12 +81,12 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
 <section class="video-section" id="videoSection">
 <h1>Video</h1>
 <p class="sub">Use the YouTube player here whenever you want to see the video or interact with an ad.</p>
-<div class="video-wrap"><div id="player"></div></div>
+<div class="video-wrap"><div id="player"></div><div id="videoPlaceholder">No video selected</div></div>
 </section>
 </div>
 <div id="audioView" class="view">
 <section class="audio-mode" id="audioMode">
-<div class="title">Lesson 2 — Sleep On It: How REM Sleep Supercharges Creativity</div>
+<div class="title">Select a video from the Library</div>
 <div class="time"><span id="current">0:00</span> / <span id="duration">0:00</span></div>
 <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Playback position">
 <div class="controls">
@@ -131,29 +141,51 @@ select{background:#151515;color:#fff;border:1px solid #333;border-radius:14px;pa
   </div>
 </div>
 </main>
+<div id="pocketShield" hidden role="dialog" aria-modal="true" aria-label="Audio locked" tabindex="-1">
+  <div id="pocketHint" aria-live="polite">Audio locked · Tap to wake</div>
+  <button id="pocketUnlock" hidden>Unlock controls</button>
+</div>
 
 <script>
-const VIDEO_ID='UZeokmLo-qQ';
-let currentVideoId='UZeokmLo-qQ';
+let currentVideoId=null;
 const STORAGE_KEY_PREFIX='yt-audio-position-';
-let STORAGE_KEY=STORAGE_KEY_PREFIX+currentVideoId;
+let STORAGE_KEY=null;
 const LIBRARY_KEY='yt-audio-library-v1';
 let player, ready=false, dragging=false;
 let sleepEndsAt=0, sleepInterval=null;
 
-const tag=document.createElement('script');
-tag.src='https://www.youtube.com/iframe_api';
-document.head.appendChild(tag);
-
+let apiRequested=false;
+function setPlayerControls(){
+  document.querySelectorAll('#audioMode button,#audioMode input,#audioMode select')
+    .forEach(control=>{control.disabled=!currentVideoId||!ready});
+}
+function ensurePlayer(){
+  if(!currentVideoId||player)return;
+  if(window.YT&&YT.Player){onYouTubeIframeAPIReady();return}
+  if(apiRequested)return;
+  apiRequested=true;
+  const tag=document.createElement('script');
+  tag.src='https://www.youtube.com/iframe_api';
+  tag.onerror=()=>{
+    apiRequested=false;
+    tag.remove();
+    document.getElementById('saved').textContent='Player could not load. Try Play again from the Library.';
+  };
+  document.head.appendChild(tag);
+}
+function startSelectedVideo(){
+  const saved=parseFloat(localStorage.getItem(STORAGE_KEY)||'0');
+  player.loadVideoById({videoId:currentVideoId,startSeconds:saved>5?saved:0});
+}
 function onYouTubeIframeAPIReady(){
+  if(!currentVideoId||player)return;
   player=new YT.Player('player',{
-    videoId:currentVideoId,
     playerVars:{playsinline:1,rel:0},
     events:{
       onReady:()=>{
         ready=true;
-        const saved=parseFloat(localStorage.getItem(STORAGE_KEY)||'0');
-        if(saved>5) player.seekTo(saved,true);
+        setPlayerControls();
+        startSelectedVideo();
         updateUI();
       },
       onStateChange:updatePlayButton
@@ -162,17 +194,17 @@ function onYouTubeIframeAPIReady(){
 }
 
 function togglePlay(){
-  if(!ready)return;
+  if(!ready||!currentVideoId)return;
   const s=player.getPlayerState();
   if(s===YT.PlayerState.PLAYING) player.pauseVideo(); else player.playVideo();
 }
 function skip(seconds){
-  if(!ready)return;
+  if(!ready||!currentVideoId)return;
   player.seekTo(Math.max(0,Math.min(player.getDuration()||Infinity,player.getCurrentTime()+seconds)),true);
   updateUI();
 }
 function updatePlayButton(){
-  if(!ready)return;
+  if(!ready||!currentVideoId)return;
   document.getElementById('playPause').textContent=
     player.getPlayerState()===YT.PlayerState.PLAYING?'❚❚ Pause':'▶︎ Play';
 }
@@ -182,7 +214,7 @@ function fmt(sec){
   return h? h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0') : m+':'+String(s).padStart(2,'0');
 }
 function updateUI(){
-  if(!ready)return;
+  if(!ready||!currentVideoId)return;
   const cur=player.getCurrentTime()||0,dur=player.getDuration()||0;
   document.getElementById('current').textContent=fmt(cur);
   document.getElementById('duration').textContent=fmt(dur);
@@ -192,20 +224,20 @@ function updateUI(){
 const seek=document.getElementById('seek');
 seek.addEventListener('input',()=>{dragging=true});
 seek.addEventListener('change',()=>{
-  if(ready&&player.getDuration()) player.seekTo(seek.value/1000*player.getDuration(),true);
+  if(ready&&currentVideoId&&player.getDuration()) player.seekTo(seek.value/1000*player.getDuration(),true);
   dragging=false;
 });
 setInterval(()=>{
-  if(!ready)return;
+  if(!ready||!currentVideoId)return;
   updateUI();
   const cur=player.getCurrentTime()||0;
-  if(cur>0){
+  if(cur>0&&player.getVideoData().video_id===currentVideoId){
     localStorage.setItem(STORAGE_KEY,String(cur));
     document.getElementById('saved').textContent='Position saved automatically';
   }
 },1000);
 document.getElementById('speedControl').addEventListener('change',function(){
-  if(!ready)return;
+  if(!ready||!currentVideoId)return;
   const requested=Number(this.value);
   const available=player.getAvailablePlaybackRates();
   if(available.includes(requested)){
@@ -218,6 +250,7 @@ document.getElementById('speedControl').addEventListener('change',function(){
 });
 
 document.getElementById('sleepTimer').addEventListener('change',function(){
+  if(!ready||!currentVideoId)return;
   const mins=Number(this.value);
   clearInterval(sleepInterval);
   sleepEndsAt=0;
@@ -237,7 +270,7 @@ function updateSleepTimer(){
     clearInterval(sleepInterval);
     sleepInterval=null;
     sleepEndsAt=0;
-    if(ready) player.pauseVideo();
+    if(ready&&currentVideoId) player.pauseVideo();
     document.getElementById('sleepStatus').textContent='Sleep timer finished';
     document.getElementById('sleepTimer').value='0';
     return;
@@ -427,6 +460,9 @@ document.getElementById('selectedRemove').addEventListener('click',()=>{
 document.getElementById('moveCancel').addEventListener('click',closeMoveModal);
 document.getElementById('moveModal').addEventListener('click',e=>{if(e.target.id==='moveModal')closeMoveModal()});
 function showView(name){
+  clearPocketLock();
+  activeView=name;
+  if(name==='audio')resetIdleTimer();
   document.getElementById('videoView').classList.toggle('active',name==='video');
   document.getElementById('audioView').classList.toggle('active',name==='audio');
   document.getElementById('libraryView').classList.toggle('active',name==='library');
@@ -441,17 +477,21 @@ document.getElementById('navAudio').addEventListener('click',()=>showView('audio
 document.getElementById('navLibrary').addEventListener('click',()=>{currentFolderId=null;selectedLibraryId=null;selectedFolderId=null;showView('library')});
 
 function loadLibraryVideo(id,title){
-  if(ready){
+  if(ready&&currentVideoId&&player.getVideoData().video_id===currentVideoId){
     const cur=player.getCurrentTime()||0;
-    if(cur>0)localStorage.setItem(STORAGE_KEY,String(cur));
-    currentVideoId=id; STORAGE_KEY=STORAGE_KEY_PREFIX+id;
-    document.querySelector('.title').textContent=title||('YouTube video '+id);
-    player.loadVideoById(id);
-    const saved=parseFloat(localStorage.getItem(STORAGE_KEY)||'0');
-    if(saved>5)setTimeout(()=>player.seekTo(saved,true),500);
-    showView('audio');
+    if(cur>0&&player.getVideoData().video_id===currentVideoId)localStorage.setItem(STORAGE_KEY,String(cur));
   }
+  currentVideoId=id; STORAGE_KEY=STORAGE_KEY_PREFIX+id;
+  document.querySelector('.title').textContent=title||('YouTube video '+id);
+  document.getElementById('videoPlaceholder').hidden=true;
+  document.getElementById('current').textContent='0:00';
+  document.getElementById('duration').textContent='0:00';
+  document.getElementById('seek').value=0;
+  document.getElementById('saved').textContent='';
+  if(ready)startSelectedVideo();else ensurePlayer();
+  showView('audio');
 }
+
 async function addVideoToLibrary(){
   const input=document.getElementById('youtubeUrl');
   const id=extractVideoId(input.value);
@@ -483,12 +523,93 @@ async function addVideoToLibrary(){
 }
 document.getElementById('addVideo').addEventListener('click',addVideoToLibrary);
 document.getElementById('youtubeUrl').addEventListener('keydown',e=>{if(e.key==='Enter')addVideoToLibrary()});
+// The shield remains mounted for both wake and unlock, preventing tap-through.
+const IDLE_MS=30000;
+let activeView='library', pocketLocked=false, idleTimer=null, idleDeadline=0, wakeTimer=null;
+const shield=document.getElementById('pocketShield');
+const unlock=document.getElementById('pocketUnlock');
+const hint=document.getElementById('pocketHint');
+const appMain=document.querySelector('main');
+function resetIdleTimer(){
+  clearTimeout(idleTimer);
+  if(activeView!=='audio'||pocketLocked)return;
+  idleDeadline=Date.now()+IDLE_MS;
+  idleTimer=setTimeout(lockAudio,IDLE_MS);
+}
+function dimShield(){
+  shield.classList.remove('awake');
+  unlock.hidden=true;
+  hint.textContent='Audio locked · Tap to wake';
+  shield.focus({preventScroll:true});
+}
+function lockAudio(){
+  if(activeView!=='audio'||pocketLocked)return;
+  pocketLocked=true;
+  clearTimeout(idleTimer);
+  document.activeElement?.blur();
+  appMain.inert=true;
+  shield.hidden=false;
+  document.body.classList.add('pocket-locked');
+  dimShield();
+}
+function clearPocketLock(){
+  clearTimeout(idleTimer);
+  clearTimeout(wakeTimer);
+  idleDeadline=0;
+  pocketLocked=false;
+  appMain.inert=false;
+  shield.hidden=true;
+  document.body.classList.remove('pocket-locked');
+}
+shield.addEventListener('click',e=>{
+  e.preventDefault();
+  e.stopPropagation();
+  if(!shield.classList.contains('awake')){
+    shield.classList.add('awake');
+    hint.textContent='Tap Unlock controls to continue';
+    unlock.hidden=false;
+    unlock.focus({preventScroll:true});
+    wakeTimer=setTimeout(dimShield,5000);
+    return;
+  }
+  if(e.target===unlock){
+    clearPocketLock();
+    resetIdleTimer();
+    document.getElementById('navAudio').focus({preventScroll:true});
+  }
+});
+shield.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+['pointerdown','touchstart','keydown','input','change','click'].forEach(type=>{
+  document.addEventListener(type,e=>{
+    // Check the deadline here too: Safari can delay timers while backgrounded.
+    if(activeView==='audio'&&!pocketLocked&&idleDeadline&&Date.now()>=idleDeadline)lockAudio();
+    if(pocketLocked){
+      if(!shield.contains(e.target)){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+      return;
+    }
+    if(activeView==='audio')resetIdleTimer();
+  },{capture:true,passive:false});
+});
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&activeView==='audio'&&!pocketLocked){
+    if(Date.now()>=idleDeadline)lockAudio();
+    else{
+      clearTimeout(idleTimer);
+      idleTimer=setTimeout(lockAudio,Math.max(0,idleDeadline-Date.now()));
+    }
+  }
+});
+setPlayerControls();
+
 renderLibrary();
 
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden&&ready){
+  if(document.hidden&&ready&&currentVideoId){
     const cur=player.getCurrentTime()||0;
-    if(cur>0)localStorage.setItem(STORAGE_KEY,String(cur));
+    if(cur>0&&player.getVideoData().video_id===currentVideoId)localStorage.setItem(STORAGE_KEY,String(cur));
   }
 });
 </script>
